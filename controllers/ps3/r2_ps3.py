@@ -26,12 +26,14 @@ f = open('/home/pi/r2_control/logs/ps3.log', 'at')
 f.write(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " : ****** ps3 started ******\n")
 f.flush()
 
-#drive = SabertoothPacketSerial(legacy=True)
-#drive.drive(0)
-#drive.turn(0)
+# Create drive and dome objects
 drive = SabertoothPacketSerial()
+dome = SabertoothPacketSerial(address=129)
+
+# Make sure everything is set to off
 drive.driveCommand(0)
 drive.turnCommand(0)
+dome.driveCommand(0)
 
 keepalive = 0.25
 
@@ -138,7 +140,8 @@ def driveDome(channel, speed):
     if __debug__:
         print "Channel %s : speed %5.5f : Desired speed: %5.5f : Actual speed: %5.5f : pulse %5.5f : duration %5.5f" % (
         channel, speed, speed_desired, speed_actual, pulse, pulse_duration)
-    pwm.setPWM(channel, 0, int(pulse))
+    #pwm.setPWM(channel, 0, int(pulse))
+    dome.driveCommand(dome_speed)
 
 
 print "Initialised... entering main loop..."
@@ -169,6 +172,11 @@ while True:
             print "Last command sent greater than %s ago, doing keepAlive" % keepalive
         drive.keepAlive()
         last_command = time.time()
+    if pygame.joystick.get_count() == 0:
+        if __debug__:
+            print "Lost Joystick"
+        break
+    # Listen for joystick events
     try:
         events = pygame.event.get()
     except:
@@ -190,6 +198,7 @@ while True:
         except:
             print "Fail...."
 	sys.exit(0)
+    # Process joystick event
     for event in events:
         if event.type == pygame.JOYBUTTONDOWN:
             buf = StringIO()
@@ -268,14 +277,14 @@ while True:
             if event.axis == PS3_AXIS_LEFT_VERTICAL:
                 if __debug__:
                     print "Value (Drive): %s : Speed Factor : %s" % (event.value, speed_fac)
-                f.write(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " : Forward/Back : " + str(event.value*speed_fac) + "\n")
+                f.write(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " : Forward/Back : " + str(event.value*drive_mod) + "\n")
                 f.flush
                 drive.driveCommand(event.value*drive_mod)
                 last_command = time.time()
             elif event.axis == PS3_AXIS_LEFT_HORIZONTAL:
                 if __debug__:
                     print "Value (Steer): %s" % event.value
-                f.write(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " : Left/Right : " + str(event.value*speed_fac) + "\n")
+                f.write(datetime.datetime.fromtimestamp(time.time()).strftime('%Y-%m-%d %H:%M:%S') + " : Left/Right : " + str(event.value*drive_mod) + "\n")
                 f.flush
                 drive.turnCommand(event.value*drive_mod)
                 last_command = time.time()
@@ -289,7 +298,8 @@ while True:
 # If the while loop quits, make sure that the motors are reset.
 drive.driveCommand(0)
 drive.turnCommand(0)
-driveDome(SERVO_DOME, 0)
+#driveDome(SERVO_DOME, 0)
+dome.driveCommand(0)
 # Turn off motors
 url = baseurl + "servo/body/ENABLE_DRIVE/0/0"
 try:
